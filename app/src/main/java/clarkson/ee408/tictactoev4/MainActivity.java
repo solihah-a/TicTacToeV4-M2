@@ -305,8 +305,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     public void showNewGameDialog( ) {
         AlertDialog.Builder alert = new AlertDialog.Builder( this );
-        alert.setTitle( "TicTacToe Game" );
-        alert.setMessage( "Play again?" );
+        alert.setTitle( tttGame.result() );
+        alert.setMessage( "Do you want to play again?" );
         PlayDialog playAgain = new PlayDialog( );
         alert.setPositiveButton( "YES", playAgain );
         alert.setNegativeButton( "NO", playAgain );
@@ -344,6 +344,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private class PlayDialog implements DialogInterface.OnClickListener {
         public void onClick( DialogInterface dialog, int id ) {
             if( id == -1 ) /* YES button */ {
+                int nextPlayer = (tttGame.getPlayer() == 1) ? 2 : 1;
+                tttGame.setPlayer(nextPlayer);
                 tttGame.resetGame( );
                 enableButtons( true );
                 resetButtons( );
