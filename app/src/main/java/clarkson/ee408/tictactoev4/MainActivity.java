@@ -78,6 +78,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      * Task 9: Updates the status text, button state, and polling flag based on whose turn it is.
      */
     private void updateTurnStatus() {
+        if (tttGame.isGameOver()) {
+            return; // Don't update turn status if the game is over
+        }
+
         if (tttGame.getTurn() == tttGame.getPlayer()) {
             // It is this player's turn
             status.setText("Your Turn");
@@ -94,7 +98,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
 
+    /**
+     * Task 10: Sends a REQUEST_MOVE to the server and processes the response.
+     */
     private void requestMove() {
+        Log.d(TAG, "Polling server for opponent's move...");
+
         // Run network operation off the main thread
         AppExecutors.getInstance().networkIO().execute(() -> {
 
@@ -107,8 +116,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
             // 4. Update the UI on the Main Thread based on the response
             AppExecutors.getInstance().mainThread().execute(() -> {
-                if (response == null || response.getStatus() == ResponseStatus.FAILURE) {
-                    Log.e(TAG, "RequestMove failed: " + (response != null ? response.getMessage() : "Null response."));
+                if (response == null) {
+                    Log.e(TAG, "RequestMove failed: Null response from server (is server running?).");
+                    return;
+                }
+
+                if (response.getStatus() == ResponseStatus.FAILURE) {
+                    Log.e(TAG, "RequestMove failed: " + response.getMessage());
                     return;
                 }
 
@@ -126,7 +140,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     // Update game state and UI
                     update(row, col);
                 } else {
-                    // No new move yet. Polling continues automatically via the Handler.
+                    // Move is -1 or null, meaning no new move yet. Polling continues automatically via the Handler.
                     Log.d(TAG, "No new move available.");
                 }
             });
@@ -238,6 +252,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             status.setBackgroundColor( Color.YELLOW);
             enableButtons( false );
             status.setText( tttGame.result( ) );
+            setShouldRequestMove(false); // Stop polling when game is over
             showNewGameDialog( );   // offer to play again
         }
     }
@@ -268,9 +283,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick( View v ) {
         Log.d(TAG, "Button clicked with ID: " + v.getId());
 
-        // 1. Check if it is currently this player's turn to prevent non-server authorized moves
+        // 1. Check if it is currently this player's turn
         if (tttGame.getTurn() != tttGame.getPlayer()) {
-            // Optional: Provide visual feedback that it's not their turn
             Log.w(TAG, "Not your turn! Button click ignored.");
             return;
         }
@@ -280,8 +294,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         int row = moveId / TicTacToe.SIDE;
         int column = moveId % TicTacToe.SIDE;
 
-        // 3. Check if the spot is already taken by trying to play locally
-        if (tttGame.getCell(row,column) != 0) {
+        // 3. Check if the spot is already taken by using the public getter
+        if (tttGame.getCell(row, column) != 0) {
             Log.w(TAG, "Spot already taken.");
             return;
         }
