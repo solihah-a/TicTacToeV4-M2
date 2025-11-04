@@ -62,4 +62,12 @@ public class GamingResponse extends Response implements Serializable {
     public int hashCode() {
         return Objects.hash(super.hashCode(), move, active);
     }
+
+    public Integer getMove() {
+        return move;
+    }
+
+    public void setMove(Integer move) {
+        this.move = move;
+    }
 }
