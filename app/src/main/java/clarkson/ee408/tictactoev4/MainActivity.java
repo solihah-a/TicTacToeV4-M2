@@ -23,6 +23,7 @@ import clarkson.ee408.tictactoev4.client.SocketClient;
 import clarkson.ee408.tictactoev4.socket.Request;
 import clarkson.ee408.tictactoev4.socket.RequestType;
 import clarkson.ee408.tictactoev4.socket.GamingResponse;
+import clarkson.ee408.tictactoev4.socket.Response;
 import clarkson.ee408.tictactoev4.socket.ResponseStatus;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -75,6 +76,39 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     /**
+     * Task 11: Sends the player's move to the server.
+     * @param move The integer representation of the move (0-8).
+     */
+    private void sendMove(int move) {
+        Log.d(TAG, "Attempting to send move to server: " + move);
+
+        // Run network operation off the main thread
+        AppExecutors.getInstance().networkIO().execute(() -> {
+
+            // 1. Build the SEND_MOVE request. The data payload is the move ID, serialized as a String.
+            String serializedMove = gson.toJson(move);
+            Request request = new Request(RequestType.SEND_MOVE, serializedMove);
+
+            // 2. Send the request and wait for a generic Response
+            SocketClient client = SocketClient.getInstance();
+            Response response = client.sendRequest(request, Response.class);
+
+            // 3. Handle response on the Main Thread (Optional, but good practice for confirmation)
+            AppExecutors.getInstance().mainThread().execute(() -> {
+                if (response == null || response.getStatus() == ResponseStatus.FAILURE) {
+                    Log.e(TAG, "SEND_MOVE failed: " + (response != null ? response.getMessage() : "No response."));
+                    // NOTE: If send fails, the game state might be inconsistent.
+                    // Advanced: You might roll back the local 'update' and re-enable the button.
+                    return;
+                }
+                Log.i(TAG, "SEND_MOVE successful. Server acknowledged move.");
+                // After successful send, the game flow ensures that updateTurnStatus()
+                // called in update() sets shouldRequestMove to true for the opponent's turn.
+            });
+        });
+    }
+
+    /**
      * Task 9: Updates the status text, button state, and polling flag based on whose turn it is.
      */
     private void updateTurnStatus() {
@@ -107,14 +141,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         // Run network operation off the main thread
         AppExecutors.getInstance().networkIO().execute(() -> {
 
-            // 2. Build the REQUEST_MOVE request
+            // 1. Build the REQUEST_MOVE request
             Request request = new Request(RequestType.REQUEST_MOVE, null);
 
-            // 3. Send the request and wait for the GamingResponse
+            // 2. Send the request and wait for the GamingResponse
             SocketClient client = SocketClient.getInstance();
             GamingResponse response = client.sendRequest(request, GamingResponse.class);
 
-            // 4. Update the UI on the Main Thread based on the response
+            // 3. Update the UI on the Main Thread based on the response
             AppExecutors.getInstance().mainThread().execute(() -> {
                 if (response == null) {
                     Log.e(TAG, "RequestMove failed: Null response from server (is server running?).");
@@ -140,7 +174,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     // Update game state and UI
                     update(row, col);
                 } else {
-                    // Move is -1 or null, meaning no new move yet. Polling continues automatically via the Handler.
+                    // No new move yet. Polling continues automatically via the Handler.
                     Log.d(TAG, "No new move available.");
                 }
             });
@@ -300,10 +334,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             return;
         }
 
-        // 4. Update the board locally
-        update( row, column );
+        // 4. Task 11: SEND the move to the server BEFORE updating the local board
+        sendMove(moveId);
 
-        // 5. TODO: In later tasks, this is where we will send the move to the server.
+        // 5. Update the board locally
+        update( row, column );
     }
 
     private class PlayDialog implements DialogInterface.OnClickListener {
