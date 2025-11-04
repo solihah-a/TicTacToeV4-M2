@@ -30,12 +30,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private static final String TAG = "MainActivity";
     private static final int DELAY_MS = 1000; // 1 second delay for polling
 
-    // Attributes from Task 5
+    // Attributes
     private TicTacToe tttGame;
     private Button [][] buttons;
     private TextView status;
-
-    // Attributes from Task 2
     private Gson gson;
 
     // Attributes for Task 8: Periodic move request
@@ -48,7 +46,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate( savedInstanceState );
 
         // Task 5: Initialize game with a placeholder Player ID (e.g., 1)
-        // This ID should be set properly after receiving server connection info in a later task.
         tttGame = new TicTacToe(1);
         buildGuiByCode( );
 
@@ -62,7 +59,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         moveRequestRunnable = new Runnable() {
             @Override
             public void run() {
-                if (shouldRequestMove) { // Check the flag before making the request
+                if (shouldRequestMove) {
                     requestMove();
                 }
                 // Schedule the runnable to run again after a delay
@@ -71,19 +68,34 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         };
 
         // --- Start the polling mechanism ---
-        // Starts the Handler loop immediately. Polling logic is controlled by shouldRequestMove.
         handler.post(moveRequestRunnable);
 
-        // Temporary: Set to true to start polling immediately for testing REQUEST_MOVE logic
-        // This will be managed by game connection logic later.
-        setShouldRequestMove(true);
+        // Task 9: Initial call to set status and polling flag based on turn (Player 1 starts)
+        updateTurnStatus();
     }
 
-    // Task 8: New method to encapsulate the network request for an opponent's move
-    private void requestMove() {
-        Log.d(TAG, "Attempting to request move from server...");
+    /**
+     * Task 9: Updates the status text, button state, and polling flag based on whose turn it is.
+     */
+    private void updateTurnStatus() {
+        if (tttGame.getTurn() == tttGame.getPlayer()) {
+            // It is this player's turn
+            status.setText("Your Turn");
+            enableButtons(true);
+            setShouldRequestMove(false); // Stop polling
+            Log.d(TAG, "Status: Your Turn. Polling stopped.");
+        } else {
+            // It is the opponent's turn
+            status.setText("Waiting for Opponent");
+            enableButtons(false);
+            setShouldRequestMove(true); // Start polling
+            Log.d(TAG, "Status: Waiting for Opponent. Polling started.");
+        }
+    }
 
-        // 1. Get the Network Executor and run network operation off the main thread
+
+    private void requestMove() {
+        // Run network operation off the main thread
         AppExecutors.getInstance().networkIO().execute(() -> {
 
             // 2. Build the REQUEST_MOVE request
@@ -97,7 +109,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             AppExecutors.getInstance().mainThread().execute(() -> {
                 if (response == null || response.getStatus() == ResponseStatus.FAILURE) {
                     Log.e(TAG, "RequestMove failed: " + (response != null ? response.getMessage() : "Null response."));
-                    // Handle server disconnection or error
                     return;
                 }
 
@@ -112,20 +123,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     int row = move / TicTacToe.SIDE;
                     int col = move % TicTacToe.SIDE;
 
-                    // Simulate opponent playing the move and update UI
+                    // Update game state and UI
                     update(row, col);
-
-                    // After receiving a move, it's now THIS player's turn, so stop polling
-                    setShouldRequestMove(false);
                 } else {
-                    // Move is -1 or null, meaning no new move yet. Polling continues.
-                    Log.d(TAG, "No new move available. Polling again in " + DELAY_MS + "ms.");
+                    // No new move yet. Polling continues automatically via the Handler.
+                    Log.d(TAG, "No new move available.");
                 }
             });
         });
     }
 
-    // New setter method to safely control the polling flag
     public void setShouldRequestMove(boolean state) {
         if (this.shouldRequestMove != state) {
             Log.d(TAG, "shouldRequestMove changed to: " + state);
@@ -139,7 +146,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onPause() {
         super.onPause();
         if (handler != null && moveRequestRunnable != null) {
-            // Remove all callbacks when activity is paused/hidden
             handler.removeCallbacks(moveRequestRunnable);
             Log.d(TAG, "Polling stopped.");
         }
@@ -149,7 +155,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onResume() {
         super.onResume();
         if (handler != null && moveRequestRunnable != null) {
-            // Resume polling when activity is foregrounded
             handler.post(moveRequestRunnable);
             Log.d(TAG, "Polling resumed.");
         }
@@ -177,17 +182,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             for( int col = 0; col < TicTacToe.SIDE; col++ ) {
                 buttons[row][col] = new Button( this );
                 buttons[row][col].setTextSize( ( int ) ( w * .2 ) );
-                // Use MainActivity as the OnClickListener (implements View.OnClickListener)
+                // Use MainActivity as the OnClickListener
                 buttons[row][col].setOnClickListener( this );
 
                 GridLayout.LayoutParams bParams = new GridLayout.LayoutParams();
-                //ensures vertical gap
                 bParams.topMargin = 10;
                 bParams.bottomMargin = 10;
-                //ensures horizontal gap
                 bParams.leftMargin = 10;
                 bParams.rightMargin = 10;
-                //account for margin change
                 bParams.width=w-20;
                 bParams.height=w-20;
                 buttons[row][col].setLayoutParams(bParams);
@@ -211,7 +213,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         status.setGravity( Gravity.CENTER );
         status.setBackgroundColor( Color.BLUE );
         status.setTextSize( ( int ) ( w * .15 ) );
-        status.setText( tttGame.result( ) );
+        status.setText( tttGame.result( ) ); // Will be overwritten by updateTurnStatus()
 
         gridLayout.addView( status );
 
@@ -221,19 +223,22 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     public void update( int row, int col ) {
         int play = tttGame.play( row, col );
+
+        if (play == 0) return; // Invalid move (square taken)
+
         if( play == 1 )
-            buttons[row][col].setText( "X" ); // Changed to X/O for clarity
+            buttons[row][col].setText( "X" );
         else if( play == 2 )
-            buttons[row][col].setText( "O" ); // Changed to X/O for clarity
+            buttons[row][col].setText( "O" );
+
+        // Task 9: Update turn status immediately after a move is recorded
+        updateTurnStatus();
 
         if( tttGame.isGameOver( ) ) {
             status.setBackgroundColor( Color.YELLOW);
             enableButtons( false );
             status.setText( tttGame.result( ) );
             showNewGameDialog( );   // offer to play again
-        } else {
-            // If game is not over, update status text to show whose turn it is
-            status.setText(tttGame.result());
         }
     }
 
@@ -259,20 +264,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         alert.show( );
     }
 
-    // Task 6: Implementing the required onClick method
     @Override
     public void onClick( View v ) {
         Log.d(TAG, "Button clicked with ID: " + v.getId());
 
-        // 1. Find the row and column of the clicked button
-        int row = v.getId() / TicTacToe.SIDE;
-        int column = v.getId() % TicTacToe.SIDE;
+        // 1. Check if it is currently this player's turn to prevent non-server authorized moves
+        if (tttGame.getTurn() != tttGame.getPlayer()) {
+            // Optional: Provide visual feedback that it's not their turn
+            Log.w(TAG, "Not your turn! Button click ignored.");
+            return;
+        }
 
-        // 2. Check if it's the player's turn (handled by TicTacToe.play() logic in later steps)
-        // For now, allow the move and update the board locally
+        // 2. Find the row and column of the clicked button
+        int moveId = v.getId();
+        int row = moveId / TicTacToe.SIDE;
+        int column = moveId % TicTacToe.SIDE;
+
+        // 3. Check if the spot is already taken by trying to play locally
+        if (tttGame.getCell(row,column) != 0) {
+            Log.w(TAG, "Spot already taken.");
+            return;
+        }
+
+        // 4. Update the board locally
         update( row, column );
 
-        // 3. TODO: In later tasks, this is where we will send the move to the server.
+        // 5. TODO: In later tasks, this is where we will send the move to the server.
     }
 
     private class PlayDialog implements DialogInterface.OnClickListener {
@@ -282,7 +299,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 enableButtons( true );
                 resetButtons( );
                 status.setBackgroundColor( Color.BLUE );
-                status.setText( tttGame.result( ) );
+
+                // Task 9: Call updateTurnStatus to reset UI/polling logic
+                updateTurnStatus();
 
                 // TODO: In later tasks, this is where we will inform the server we are ready for a new game.
             }

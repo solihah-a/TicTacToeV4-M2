@@ -17,6 +17,13 @@ public class TicTacToe implements Serializable {
         this(1);
     }
 
+    public int getCell(int row, int col) {
+        if(row >= 0 && col >= 0 && row < SIDE && col < SIDE) {
+            return game[row][col];
+        }
+        return 0;
+    }
+
     public int play( int row, int col ) {
         int currentTurn = turn;
         if( row >= 0 && col >= 0 && row < SIDE && col < SIDE
